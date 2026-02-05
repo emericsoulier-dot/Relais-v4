@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Relais V4 - Secure Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand': '#e05036',
+                        'brand-dark': '#c03520',
+                        'slate-bg': '#f8fafc',
+                        'card-bg': '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        
+        .btn-check:checked + div { background-color: #3b82f6; color: white; border-color: #3b82f6; transform: scale(1.02); box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4); }
+        .btn-rank:checked + div { background-color: #fbbf24; color: black; border-color: #fbbf24; font-weight: 900; transform: scale(1.1); }
+        .chk-tech:checked + div { background-color: #dcfce7; color: #15803d; border-color: #22c55e; border-width: 2px; }
+        .chk-fault:checked + div { background-color: #fee2e2; color: #b91c1c; border-color: #ef4444; border-width: 2px; }
+        
+        input[type="number"] { -moz-appearance: textfield; }
+        .gauge-needle { transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 50% 50%; }
+        .page-transition { animation: fadeIn 0.3s ease-in-out; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-bg text-slate-800 min-h-screen font-sans flex flex-col">
+
+    <header class="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-200">
+        <div class="flex justify-between items-center max-w-2xl mx-auto px-4 py-3">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="goToPage('setup')">
+                <div class="w-8 h-8 bg-brand text-white rounded-lg flex items-center justify-center font-bold italic">R</div>
+                <h1 class="text-xl font-black uppercase tracking-tighter text-slate-800 hidden sm:block">Relais V4</h1>
+            </div>
+            
+            <div class="flex gap-2">
+                <button onclick="fullReset()" id="btn-reset" class="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-200 hover:bg-red-100 flex items-center gap-1" title="Nouvelle Classe">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    RAZ
+                </button>
+
+                <button onclick="undoLastAction()" id="btn-undo" class="hidden px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold border border-gray-300 hover:bg-gray-200 flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                    Annuler
+                </button>
+                <button onclick="goToPage('summary')" class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold border border-blue-200 hover:bg-blue-100">
+                    📊 Bilan
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="app-container" class="max-w-2xl mx-auto w-full p-4 flex-grow pb-24">
+        </main>
+
+    <footer id="race-nav" class="fixed bottom-0 w-full bg-white border-t border-gray-200 p-4 z-50 hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div class="max-w-2xl mx-auto flex justify-between gap-4">
+            <button onclick="prevPage()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200 active:scale-95 transition-transform flex justify-center items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                Retour
+            </button>
+            <button onclick="nextPage()" id="btn-next" class="flex-1 bg-brand text-white font-bold py-3 rounded-xl shadow-lg hover:bg-brand-dark active:scale-95 transition-transform flex justify-center items-center gap-2">
+                Suivant
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+        </div>
+    </footer>
+
+    <div id="save-toast" class="fixed top-20 right-4 bg-green-100 border border-green-300 text-green-800 px-3 py-1 rounded shadow-lg text-xs font-bold transform transition-all duration-300 translate-x-full opacity-0 z-50 flex items-center gap-2">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        Sauvegardé
+    </div>
+
+    <script>
+        // --- DATA MODEL ---
+        // Initial state constants
+        const INITIAL_STUDENTS = [
+            { id: 'A', name: '', speed: 0 },
+            { id: 'B', name: '', speed: 0 },
+            { id: 'C', name: '', speed: 0 },
+            { id: 'D', name: '', speed: 0 }
+        ];
+
+        const raceConfig = [
+            { d: 0, r: 1 }, { d: 0, r: 1 },
+            { d: 2, r: 3 }, { d: 2, r: 3 },
+            { d: 1, r: 0 }, { d: 1, r: 0 },
+            { d: 3, r: 2 }, { d: 3, r: 2 }
+        ];
+
+        // Working variables
+        let students = JSON.parse(JSON.stringify(INITIAL_STUDENTS));
+        let racesData = Array(8).fill().map(() => ({
+            mainOpposee: false,
+            finZone: false,
+            sansRetourner: false,
+            horsZone: false,
+            perfIndex: 0, 
+            rank: 8,
+            points: 0,
+            targetSpeed: 0,
+            targetDist12: 0
+        }));
+
+        let historyStack = [];
+        const PERF_POINTS = [0, 10, 20, 40, 70, 110];
+        const RANK_POINTS = { 1:70, 2:60, 3:50, 4:40, 5:30, 6:20, 7:10, 8:0 };
+
+        let currentPage = 'setup'; 
+        let currentRaceIndex = 0;
+
+        // --- INIT & LOCAL STORAGE ---
+        function init() {
+            loadLocalData(); // Chargement des données au démarrage
+            renderPage();
+            calculateAll();
+        }
+
+        function saveLocalData() {
+            const appState = {
+                students: students,
+                racesData: racesData,
+                currentRaceIndex: currentRaceIndex,
+                currentPage: currentPage
+            };
+            localStorage.setItem('relaisV4_data', JSON.stringify(appState));
+            showSaveToast();
+        }
+
+        function loadLocalData() {
+            const saved = localStorage.getItem('relaisV4_data');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    students = parsed.students || students;
+                    racesData = parsed.racesData || racesData;
+                    // On ne restaure pas forcément la page pour éviter la confusion, 
+                    // mais on peut restaurer l'index de course si on était en course.
+                    if(parsed.currentPage && parsed.currentPage.startsWith('race')) {
+                       currentRaceIndex = parsed.currentRaceIndex || 0;
+                       currentPage = parsed.currentPage;
+                    }
+                } catch (e) {
+                    console.error("Erreur lecture sauvegarde", e);
+                }
+            }
+        }
+
+        function fullReset() {
+            if (confirm("ATTENTION : Vous allez effacer toutes les données de la classe actuelle.\n\nÊtes-vous sûr de vouloir tout remettre à zéro ?")) {
+                localStorage.removeItem('relaisV4_data');
+                location.reload();
+            }
+        }
+
+        function showSaveToast() {
+            const toast = document.getElementById('save-toast');
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+            }, 1500);
+        }
+
+        // --- NAVIGATION ---
+        function goToPage(page) {
+            currentPage = page;
+            
+            if (page.startsWith('race-')) {
+                currentRaceIndex = parseInt(page.split('-')[1]);
+                document.getElementById('race-nav').classList.remove('hidden');
+                document.getElementById('btn-undo').classList.remove('hidden');
+                document.getElementById('btn-reset').classList.add('hidden'); // Cacher Reset pendant course
+                historyStack = []; 
+            } else {
+                document.getElementById('race-nav').classList.add('hidden');
+                document.getElementById('btn-undo').classList.add('hidden');
+                document.getElementById('btn-reset').classList.remove('hidden'); // Montrer Reset au menu
+            }
+
+            saveLocalData(); // Sauvegarde position
+            renderPage();
+        }
+
+        function nextPage() {
+            if (currentRaceIndex < 7) {
+                goToPage(`race-${currentRaceIndex + 1}`);
+            } else {
+                goToPage('summary');
+            }
+        }
+
+        function prevPage() {
+            if (currentRaceIndex > 0) {
+                goToPage(`race-${currentRaceIndex - 1}`);
+            } else {
+                goToPage('setup');
+            }
+        }
+
+        // --- UNDO SYSTEM ---
+        function saveState() {
+            const dataCopy = JSON.parse(JSON.stringify(racesData[currentRaceIndex]));
+            historyStack.push({ raceIndex: currentRaceIndex, data: dataCopy });
+            if(historyStack.length > 10) historyStack.shift();
+        }
+
+        function undoLastAction() {
+            if (historyStack.length === 0) return;
+            const lastState = historyStack.pop();
+            if (lastState.raceIndex === currentRaceIndex) {
+                racesData[currentRaceIndex] = lastState.data;
+                calculateAll();
+                saveLocalData(); // Sauvegarde après undo
+                renderPage();
+            }
+        }
+
+        // --- RENDERING ---
+        function renderPage() {
+            const container = document.getElementById('app-container');
+            container.innerHTML = '';
+            container.className = "max-w-2xl mx-auto w-full p-4 flex-grow pb-24 page-transition";
+
+            if (currentPage === 'setup') {
+                renderSetup(container);
+            } else if (currentPage.startsWith('race-')) {
+                renderRace(container, currentRaceIndex);
+            } else if (currentPage === 'summary') {
+                renderSummary(container);
+            }
+        }
+
+        // --- PAGE: SETUP ---
+        function renderSetup(container) {
+            container.innerHTML = `
+                <div class="bg-card-bg rounded-2xl p-1 shadow-md mb-6 overflow-hidden border border-gray-200">
+                    <img src="Relais.jpg" alt="Schéma" class="w-full h-auto object-cover" onerror="this.src='https://placehold.co/600x200/e05036/white?text=Image+Relais+Non+Trouvée'; this.style.opacity=0.5">
+                    <div class="p-2 text-center text-xs text-gray-500 bg-gray-50 border-t border-gray-100">
+                        Configuration Terrain 2x6"
+                    </div>
+                </div>
+
+                <div class="bg-card-bg rounded-2xl p-6 shadow-xl border border-gray-200">
+                    <h2 class="text-lg font-bold text-brand mb-4 flex items-center gap-2 uppercase">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                        Calibrage Élèves
+                    </h2>
+                    <div class="grid gap-4">
+                        ${students.map((s, i) => `
+                            <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-gray-200 shadow-sm">
+                                <div class="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center font-bold text-lg shadow-md">${s.id}</div>
+                                <div class="flex-grow">
+                                    <input type="text" placeholder="Nom Prénom" class="w-full bg-transparent border-b-2 border-gray-300 text-slate-800 px-1 py-1 focus:outline-none focus:border-brand font-semibold placeholder-gray-400" 
+                                        oninput="updateStudent(${i}, 'name', this.value)" value="${s.name}">
+                                </div>
+                                <div class="flex flex-col items-end">
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" placeholder="0" class="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1 text-right text-slate-900 font-bold text-lg focus:ring-2 focus:ring-brand outline-none" 
+                                            oninput="updateStudent(${i}, 'speed', this.value)" value="${s.speed || ''}">
+                                        <span class="text-xs text-gray-500 font-bold">km/h</span>
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 mt-1 font-medium">VMA 6s</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="goToPage('race-0')" class="mt-8 w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
+                        COMMENCER LES COURSES
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="mt-6 text-center">
+                    <p class="text-xs text-gray-400">Toutes les données sont sauvegardées automatiquement sur cet appareil.</p>
+                </div>
+            `;
+        }
+
+        // --- PAGE: RACE ---
+        function renderRace(container, idx) {
+            const r = racesData[idx];
+            const cfg = raceConfig[idx];
+            
+            const s1 = students[cfg.d].speed;
+            const s2 = students[cfg.r].speed;
+            const avg = (s1 + s2) / 2;
+            const targetDist = avg / 0.3;
+            const judges = [0,1,2,3].filter(x => x !== cfg.d && x !== cfg.r);
+
+            container.innerHTML = `
+                <div class="bg-card-bg rounded-2xl shadow-xl border border-gray-200 overflow-hidden relative">
+                    <div class="bg-slate-100 p-4 border-b border-gray-200">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-black text-slate-800 text-2xl italic tracking-tight">COURSE ${idx + 1} / 8</span>
+                            <div class="bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm text-sm font-bold text-gray-500">
+                                2 x 6 sec
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between mt-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center font-bold text-sm">${students[cfg.d].id}</span>
+                                <span class="font-bold text-slate-700 truncate max-w-[80px]">${students[cfg.d].name || 'Donneur'}</span>
+                            </div>
+                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            <div class="flex items-center gap-2 flex-row-reverse">
+                                <span class="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center font-bold text-sm">${students[cfg.r].id}</span>
+                                <span class="font-bold text-slate-700 truncate max-w-[80px]">${students[cfg.r].name || 'Receveur'}</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex gap-2 text-xs text-gray-500 justify-center">
+                            <span>👀 Juges : <b>${students[judges[0]].id}</b> & <b>${students[judges[1]].id}</b></span>
+                        </div>
+                    </div>
+
+                    <div class="p-5 space-y-6">
+                        <div class="flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 p-4 rounded-xl shadow-lg text-white relative overflow-hidden">
+                            <div class="text-gray-400 text-[10px] uppercase tracking-widest font-bold">Vitesse Cible</div>
+                            <div class="flex items-baseline gap-2">
+                                <div class="text-5xl font-black tracking-tighter text-white">${avg.toFixed(1)}</div>
+                                <div class="text-lg text-brand font-bold">km/h</div>
+                            </div>
+                            <div class="mt-2 bg-white/10 px-3 py-1 rounded-full text-sm font-medium">
+                                Distance 12s : <span class="text-white font-bold">${targetDist.toFixed(1)} m</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 text-sm font-bold">
+                            <label class="cursor-pointer select-none">
+                                <input type="checkbox" class="hidden chk-tech" ${r.mainOpposee ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'mainOpposee', this.checked)">
+                                <div class="border border-gray-200 rounded-xl p-3 text-center transition-all bg-white hover:bg-gray-50 h-full flex flex-col items-center justify-center shadow-sm text-slate-600">
+                                    <span class="text-xl mb-1">✋</span>
+                                    <span>Main Opp.</span>
+                                    <span class="text-xs text-green-600">+2 pts</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer select-none">
+                                <input type="checkbox" class="hidden chk-tech" ${r.sansRetourner ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'sansRetourner', this.checked)">
+                                <div class="border border-gray-200 rounded-xl p-3 text-center transition-all bg-white hover:bg-gray-50 h-full flex flex-col items-center justify-center shadow-sm text-slate-600">
+                                    <span class="text-xl mb-1">👀</span>
+                                    <span>Sans Regard</span>
+                                    <span class="text-xs text-green-600">+2 pts</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer select-none col-span-2">
+                                <input type="checkbox" class="hidden chk-tech" ${r.finZone ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'finZone', this.checked)">
+                                <div class="border border-gray-200 rounded-xl p-3 text-center transition-all bg-white hover:bg-gray-50 flex items-center justify-center gap-3 shadow-sm text-slate-600">
+                                    <span class="text-xl">🏁</span> 
+                                    <span>Transmission Fin de Zone</span>
+                                    <span class="text-green-600 bg-green-100 px-2 py-0.5 rounded text-xs">+10 pts</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="text-xs text-gray-500 font-bold uppercase flex justify-between px-1">
+                                <span>Performance Vitesse</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2">
+                                ${[0, 1, 2, 3, 4, 5].map(pIdx => {
+                                    let label = "Non";
+                                    let sub = "0";
+                                    let col = "text-gray-400";
+                                    if(pIdx===1) { label="Atteinte"; sub="10"; col="text-blue-600"; }
+                                    if(pIdx>1) { label=`+${pIdx-1} km/h`; sub=`${PERF_POINTS[pIdx]}`; col="text-green-600"; }
+                                    if(pIdx>3) { col="text-orange-500"; }
+                                    
+                                    return `
+                                    <label class="cursor-pointer text-center relative group">
+                                        <input type="radio" name="perf-${idx}" class="hidden btn-check" ${r.perfIndex === pIdx ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'perfIndex', ${pIdx})">
+                                        <div class="border border-gray-200 rounded-lg py-2 px-1 transition-all h-full flex flex-col justify-center items-center bg-white shadow-sm group-hover:border-blue-300">
+                                            <span class="text-[10px] font-bold ${col}">${label}</span>
+                                            <span class="text-[10px] text-gray-400 font-bold">${sub} pts</span>
+                                        </div>
+                                    </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="text-xs text-gray-500 font-bold uppercase px-1">Classement Course</div>
+                            <div class="flex justify-between gap-1 overflow-x-auto pb-2 scrollbar-hide">
+                                ${[1,2,3,4,5,6,7].map(rk => `
+                                    <label class="cursor-pointer flex-1 min-w-[40px]">
+                                        <input type="radio" name="rank-${idx}" class="hidden btn-rank" ${r.rank === rk ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'rank', ${rk})">
+                                        <div class="border border-gray-200 rounded-lg h-10 flex items-center justify-center font-bold text-sm text-gray-500 transition-all bg-white shadow-sm hover:bg-yellow-50">${rk}</div>
+                                        <div class="text-[10px] text-center text-gray-400 mt-1 font-medium">${RANK_POINTS[rk]}</div>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <label class="cursor-pointer block">
+                            <input type="checkbox" class="hidden chk-fault" ${r.horsZone ? 'checked' : ''} onchange="updateRaceVal(${idx}, 'horsZone', this.checked)">
+                            <div class="border-2 border-dashed border-red-200 text-red-400 rounded-xl p-3 text-center transition-all hover:bg-red-50 text-xs font-bold uppercase flex items-center justify-center gap-2">
+                                <span>⚠️</span> Transmission Hors Zone (0 pt)
+                            </div>
+                        </label>
+                        
+                        <div id="msg-alert" class="hidden mt-2 bg-orange-100 text-orange-600 text-center font-bold py-2 rounded-lg text-sm border border-orange-200">
+                            VERIFIE TES MARQUES !
+                        </div>
+
+                        <div class="flex justify-between items-center bg-slate-800 -mx-5 -mb-5 p-5 mt-4 text-white">
+                            <span class="text-gray-300 font-bold text-sm uppercase tracking-wider">Total Course</span>
+                            <div class="text-4xl font-black">${r.points} <span class="text-sm font-medium text-gray-400">pts</span></div>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+            
+            const alertBox = document.getElementById('msg-alert');
+            if (r.horsZone) {
+                alertBox.textContent = "TRANSMISSION HORS ZONE = 0";
+                alertBox.classList.remove('hidden');
+                alertBox.classList.replace('bg-orange-100', 'bg-red-100');
+                alertBox.classList.replace('text-orange-600', 'text-red-600');
+            } else if (!r.finZone && (r.perfIndex > 0 || r.rank < 8)) {
+                alertBox.textContent = "ATTENTION : MARQUES À VÉRIFIER";
+                alertBox.classList.remove('hidden');
+                alertBox.classList.replace('bg-red-100', 'bg-orange-100');
+                alertBox.classList.replace('text-red-600', 'text-orange-600');
+            } else {
+                alertBox.classList.add('hidden');
+            }
+        }
+
+        // --- PAGE: SUMMARY ---
+        function renderSummary(container) {
+            const totalScore = racesData.reduce((acc, r) => acc + r.points, 0);
+            const studentStats = { A: 0, B: 0, C: 0, D: 0 };
+            const pairStats = {}; 
+
+            racesData.forEach((r, i) => {
+                const cfg = raceConfig[i];
+                const p1 = students[cfg.d].id;
+                const p2 = students[cfg.r].id;
+                
+                studentStats[p1] += r.points;
+                studentStats[p2] += r.points;
+
+                const pairKey = `${p1}-${p2}`;
+                if (!pairStats[pairKey]) pairStats[pairKey] = { maxSpeed: 0, bestRank: 8 };
+                
+                let speedAchieved = 0;
+                if (r.perfIndex > 0) speedAchieved = r.targetSpeed + (r.perfIndex - 1);
+                
+                if (speedAchieved > pairStats[pairKey].maxSpeed) pairStats[pairKey].maxSpeed = speedAchieved;
+                if (r.rank < pairStats[pairKey].bestRank) pairStats[pairKey].bestRank = r.rank;
+            });
+
+            let level = "DÉBUTANT";
+            let color = "#ef4444";
+            if (totalScore >= 250) { level = "CONFIRMÉ"; color="#eab308"; }
+            if (totalScore >= 450) { level = "ATHLÈTE"; color="#22c55e"; }
+            if (totalScore >= 700) { level = "ELITE"; color="#3b82f6"; }
+
+            const pct = Math.min(totalScore / 800, 1);
+            const angle = -90 + (pct * 180);
+
+            container.innerHTML = `
+                <div class="bg-card-bg rounded-2xl p-6 shadow-xl border border-gray-200 text-center mb-6">
+                    <h2 class="text-2xl font-black text-slate-800 mb-2">BILAN CHAMPIONNAT</h2>
+                    
+                    <div class="relative w-64 h-32 mx-auto mb-4 overflow-hidden">
+                        <svg viewBox="0 0 200 100" class="w-full h-full">
+                            <path d="M 20 100 A 80 80 0 0 1 60 45" fill="none" stroke="#ef4444" stroke-width="15" />
+                            <path d="M 60 45 A 80 80 0 0 1 140 45" fill="none" stroke="#eab308" stroke-width="15" />
+                            <path d="M 140 45 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="15" />
+                            <text x="40" y="65" font-size="8" fill="#475569" font-weight="bold">DÉB</text>
+                            <text x="100" y="35" font-size="8" fill="#475569" text-anchor="middle" font-weight="bold">CONF</text>
+                            <text x="160" y="65" font-size="8" fill="#475569" font-weight="bold">ATH</text>
+                            <g class="gauge-needle" style="transform: rotate(${angle}deg);">
+                                <path d="M 100 100 L 100 20" stroke="#1e293b" stroke-width="4" stroke-linecap="round" />
+                                <circle cx="100" cy="100" r="6" fill="#1e293b" />
+                            </g>
+                        </svg>
+                    </div>
+
+                    <div class="text-4xl font-black mb-1" style="color:${color}">${level}</div>
+                    <div class="text-2xl font-bold text-slate-600">${totalScore} PTS</div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-4 mb-24">
+                    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+                        <h3 class="font-bold text-slate-700 mb-3 border-b pb-2">Classement Élèves</h3>
+                        <div class="space-y-2">
+                            ${Object.entries(studentStats).sort(([,a],[,b])=>b-a).map(([id, pts], idx) => {
+                                const name = students.find(s=>s.id===id).name || 'Élève '+id;
+                                return `
+                                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-brand w-5 text-center">${idx+1}.</span>
+                                        <span class="font-semibold text-slate-700">${name} (${id})</span>
+                                    </div>
+                                    <span class="font-bold text-slate-900">${pts} pts</span>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+                        <h3 class="font-bold text-slate-700 mb-3 border-b pb-2">Stats Binômes</h3>
+                        <div class="space-y-2">
+                            ${Object.entries(pairStats).map(([pair, stats]) => `
+                                <div class="flex justify-between items-center bg-gray-50 p-2 rounded text-sm">
+                                    <span class="font-bold bg-slate-200 px-2 rounded text-slate-700">${pair.replace('-', ' & ')}</span>
+                                    <div class="text-right">
+                                        <div class="text-green-600 font-bold">V.Max: ${stats.maxSpeed.toFixed(1)}</div>
+                                        <div class="text-orange-500 font-bold">Best Rg: ${stats.bestRank===8?'-':stats.bestRank}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fixed bottom-0 left-0 w-full bg-white p-4 border-t border-gray-200 shadow-lg z-50">
+                    <button onclick="generatePDF()" class="w-full max-w-2xl mx-auto bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-black flex justify-center items-center gap-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        TÉLÉCHARGER RÉSULTATS (PDF)
+                    </button>
+                </div>
+            `;
+        }
+
+        // --- UPDATE LOGIC ---
+        function updateStudent(index, field, value) {
+            if (field === 'speed') value = parseFloat(value) || 0;
+            students[index][field] = value;
+            saveLocalData();
+            calculateAll();
+        }
+
+        function updateRaceVal(raceIdx, field, value) {
+            saveState();
+            racesData[raceIdx][field] = value;
+            calculateAll();
+            saveLocalData();
+            renderPage();
+        }
+
+        function calculateAll() {
+            raceConfig.forEach((cfg, i) => {
+                const s1 = students[cfg.d].speed;
+                const s2 = students[cfg.r].speed;
+                const avgSpeed = (s1 + s2) / 2;
+                
+                racesData[i].targetSpeed = avgSpeed;
+                racesData[i].targetDist12 = avgSpeed / 0.3;
+
+                let score = 0;
+                const d = racesData[i];
+
+                if (d.horsZone) {
+                    score = 0;
+                } else {
+                    if (d.mainOpposee) score += 2;
+                    if (d.sansRetourner) score += 2;
+                    if (d.finZone) score += 10;
+                    score += PERF_POINTS[d.perfIndex];
+                    score += RANK_POINTS[d.rank];
+                }
+                racesData[i].points = score;
+            });
+        }
+
+        // --- PDF EXPORT ---
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFillColor(224, 80, 54);
+            doc.rect(0, 0, 210, 20, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text("BILAN RELAIS VITESSE V4", 105, 13, null, null, "center");
+
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(10);
+            let yPos = 30;
+            doc.text("CONFIGURATION ÉLÈVES", 14, yPos);
+            
+            const studentRows = students.map(s => [s.id, s.name || '---', `${s.speed} km/h`]);
+            doc.autoTable({
+                startY: yPos + 2,
+                head: [['ID', 'Nom', 'VMA 6s']],
+                body: studentRows,
+                theme: 'grid',
+                headStyles: { fillColor: [50, 50, 50] },
+                styles: { fontSize: 9 }
+            });
+
+            yPos = doc.lastAutoTable.finalY + 10;
+            doc.text("DÉTAIL DES COURSES", 14, yPos);
+
+            const raceRows = racesData.map((r, i) => {
+                const cfg = raceConfig[i];
+                let perfTxt = r.perfIndex === 0 ? "Non" : (r.perfIndex === 1 ? "Ok" : `+${r.perfIndex-1}`);
+                let bonusTxt = [];
+                if(r.mainOpposee) bonusTxt.push("Main");
+                if(r.sansRetourner) bonusTxt.push("Regard");
+                if(r.finZone) bonusTxt.push("Zone");
+                
+                return [
+                    i+1, 
+                    `${students[cfg.d].id} > ${students[cfg.r].id}`, 
+                    `${r.targetSpeed.toFixed(1)}`,
+                    bonusTxt.join(' '),
+                    perfTxt, 
+                    r.rank === 8 ? '-' : r.rank,
+                    r.horsZone ? 'HZ (0)' : r.points
+                ];
+            });
+
+            doc.autoTable({
+                startY: yPos + 2,
+                head: [['#', 'Duo', 'Cible', 'Tech', 'Perf', 'Rg', 'Pts']],
+                body: raceRows,
+                theme: 'striped',
+                headStyles: { fillColor: [224, 80, 54] },
+                styles: { halign: 'center', fontSize: 9 }
+            });
+
+            yPos = doc.lastAutoTable.finalY + 10;
+            
+            const pairStats = {}; 
+            racesData.forEach((r, i) => {
+                const k = `${students[raceConfig[i].d].id}-${students[raceConfig[i].r].id}`;
+                if (!pairStats[k]) pairStats[k] = { max: 0, best: 8 };
+                let spd = r.perfIndex > 0 ? r.targetSpeed + (r.perfIndex - 1) : 0;
+                if(spd > pairStats[k].max) pairStats[k].max = spd;
+                if(r.rank < pairStats[k].best) pairStats[k].best = r.rank;
+            });
+
+            const pairRows = Object.entries(pairStats).map(([k, v]) => [k, v.max.toFixed(1) + ' km/h', v.best === 8 ? '-' : v.best]);
+
+            doc.text("SYNTHÈSE BINÔMES", 14, yPos);
+            doc.autoTable({
+                startY: yPos + 2,
+                head: [['Binôme', 'Vitesse Max', 'Meilleur Rg']],
+                body: pairRows,
+                theme: 'grid',
+                headStyles: { fillColor: [50, 50, 50] },
+                styles: { halign: 'center' },
+                tableWidth: 'wrap'
+            });
+
+            const finalScore = document.querySelector('.text-2xl.font-bold.text-slate-600').innerText; 
+            const level = document.querySelector('.text-4xl.font-black.mb-1').innerText;
+
+            doc.setFontSize(14);
+            doc.text(`SCORE TOTAL: ${finalScore}`, 120, yPos + 15);
+            doc.text(`NIVEAU: ${level}`, 120, yPos + 25);
+            
+            doc.save("resultats-relais-v4-secure.pdf");
+        }
+
+        init();
+    </script>
+</body>
+</html>
